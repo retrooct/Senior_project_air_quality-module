@@ -1,7 +1,7 @@
 # main.py
 
 import time
-from inference import calculate_indices
+from inference import calculate_index
 
 
 while True:
