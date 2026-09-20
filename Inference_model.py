@@ -1,6 +1,7 @@
-# inference.py
-
-def calculate_indices(
+#-----------------------
+# inferencce model for 
+#----------------------
+def calculate_index(
     temperature_c: float,
     humidity: float,
     pm1_0: float,
@@ -8,8 +9,7 @@ def calculate_indices(
     pm10: float,
     voc_index: float,
     nox_index: float,
-    co_ppm: float = 0.0,
-    wind_speed: float = 0.0
+    co_ppm: float = 0.0
 ) -> dict:
     """
     Rule-based environmental inference model.
