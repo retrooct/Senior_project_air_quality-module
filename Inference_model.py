@@ -1,6 +1,8 @@
 #-----------------------
-# inferencce model for 
+# inferencce model
 #----------------------
+
+# Sensor data dictionary
 def calculate_index(
     temperature_c: float,
     humidity: float,
@@ -18,12 +20,40 @@ def calculate_index(
     It estimates possible environmental conditions based on sensor patterns.
     """
 
+    # Rule-based environmental risk scores
     smoke_score = 0
     dust_score = 0
     urban_pollution_score = 0
     general_danger_score = 0
+    
+    # empty string for output results
+    results = []
 
-    evidence = []
+     # -------------------------------
+    # VOC / NOx gas evidence
+    # -------------------------------
+
+    if voc_index >= 150:
+        smoke_score += 1
+        urban_pollution_score += 1
+        general_danger_score += 1
+        results.append("VOC Index indicates an elevated VOC event")
+
+    if nox_index >= 20:
+        urban_pollution_score += 1
+        general_danger_score += 1
+        results.append("NOx Index indicates an elevated NOx event")
+
+    if nox_index >= 20 and pm2_5 > 35:
+        urban_pollution_score += 2
+        general_danger_score += 1
+        results.append("NOx and PM2.5 are both elevated, suggesting combustion-related pollution")
+
+    if voc_index >= 150 and pm2_5 > 35:
+        smoke_score += 2
+        general_danger_score += 1
+        evidence.append("VOC Index and PM2.5 are both elevated, suggesting smoke or indoor/outdoor pollution event")
+
 
     # -------------------------------
     # Smoke / wildfire-like evidence
