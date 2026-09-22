@@ -10,8 +10,7 @@ from temp_sense import read_temperature_f
 while True:
     # ==========================================
     # SENSOR VALUES
-    # For now these are placeholder test values.
-    # Later, replace these with real sensor readings.
+    # replace the values for the 
     # ==========================================
 
     temperature_c = read_temperature_c()
