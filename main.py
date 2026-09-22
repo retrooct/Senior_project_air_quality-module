@@ -3,6 +3,9 @@
 import time
 from inference import calculate_index
 
+from temp_sense import read_temperature_c
+from temp_sense import read_temperature_f
+
 
 while True:
     # ==========================================
@@ -11,7 +14,8 @@ while True:
     # Later, replace these with real sensor readings.
     # ==========================================
 
-    temperature_c = 25.4
+    temperature_c = read_temperature_c()
+    
     humidity = 48.0
 
     pm1_0 = 12.0
