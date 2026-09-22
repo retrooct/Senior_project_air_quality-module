@@ -52,7 +52,7 @@ def calculate_index(
     if voc_index >= 150 and pm2_5 > 35:
         smoke_score += 2
         general_danger_score += 1
-        evidence.append("VOC Index and PM2.5 are both elevated, suggesting smoke or indoor/outdoor pollution event")
+        results.append("VOC Index and PM2.5 are both elevated, suggesting smoke or indoor/outdoor pollution event")
 
 
     # -------------------------------
@@ -62,22 +62,22 @@ def calculate_index(
     if pm2_5 > 35:
         smoke_score += 2
         general_danger_score += 1
-        evidence.append("PM2.5 is elevated")
+        results.append("PM2.5 is elevated")
 
     if pm2_5 > 55:
         smoke_score += 2
         general_danger_score += 2
-        evidence.append("PM2.5 is very high")
+        results.append("PM2.5 is very high")
 
     if voc_index > 150:
         smoke_score += 1
         general_danger_score += 1
-        evidence.append("VOC index is elevated")
+        results.append("VOC index is elevated")
 
     if co_ppm > 1.0:
         smoke_score += 1
         urban_pollution_score += 1
-        evidence.append("CO is elevated")
+        results.append("CO is elevated")
 
     # -------------------------------
     # Dust evidence
@@ -86,12 +86,12 @@ def calculate_index(
     if pm10 > 50:
         dust_score += 2
         general_danger_score += 1
-        evidence.append("PM10 is elevated")
+        results.append("PM10 is elevated")
 
     if pm10 > 100:
         dust_score += 2
         general_danger_score += 2
-        evidence.append("PM10 is very high")
+        results.append("PM10 is very high")
 
     # PM10 much larger than PM2.5 can suggest coarse particles.
     if pm2_5 > 0:
@@ -168,6 +168,6 @@ def calculate_index(
         "general_danger_score": general_danger_score,
         "danger_level": danger_level,
         "event": event,
-        "evidence": evidence,
+        "results": results,
         "pm10_pm25_ratio": pm10_pm25_ratio
     }
