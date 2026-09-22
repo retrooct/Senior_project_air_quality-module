@@ -37,6 +37,11 @@ def calculate_index(
     # VOC / NOx gas evidence
     # -------------------------------
 
+    if voc_index < 100:
+        voc_event_score = 0
+        smoke_score -= 1
+        results.append("VOC Index is in normal levels")
+
     if voc_index >= 100:
         voc_event_score += 1
         smoke_score += 1
