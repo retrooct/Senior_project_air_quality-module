@@ -7,7 +7,8 @@ from inference import calculate_index
 while True:
     # ==========================================
     # SENSOR VALUES
-    # Later these should come from your sensor files.
+    # For now these are placeholder test values.
+    # Later, replace these with real sensor readings.
     # ==========================================
 
     temperature_c = 25.4
@@ -20,27 +21,22 @@ while True:
     voc_index = 165.0
     nox_index = 80.0
 
-    co_ppm = 0.0          # Use 0.0 if you do not have a CO sensor yet
-    wind_speed = 0.0      # Use 0.0 if you do not have wind sensor yet
-
     # ==========================================
     # RUN INFERENCE MODEL
     # ==========================================
 
-    result = calculate_indices(
+    result = calculate_index(
         temperature_c=temperature_c,
         humidity=humidity,
         pm1_0=pm1_0,
         pm2_5=pm2_5,
         pm10=pm10,
         voc_index=voc_index,
-        nox_index=nox_index,
-        co_ppm=co_ppm,
-        wind_speed=wind_speed
+        nox_index=nox_index
     )
 
     # ==========================================
-    # DISPLAY RESULTS
+    # DISPLAY SENSOR VALUES
     # ==========================================
 
     print("--------------------------------------")
@@ -54,6 +50,11 @@ while True:
     print(f"VOC Index:   {voc_index:.2f}")
     print(f"NOx Index:   {nox_index:.2f}")
     print()
+
+    # ==========================================
+    # DISPLAY INFERENCE SCORES
+    # ==========================================
+
     print(f"Smoke score:       {result['smoke_score']}")
     print(f"Dust score:        {result['dust_score']}")
     print(f"Urban score:       {result['urban_pollution_score']}")
@@ -61,10 +62,18 @@ while True:
     print(f"Danger level:      {result['danger_level']}")
     print(f"Assessment:        {result['event']}")
     print()
-    print("Evidence:")
 
-    for item in result["evidence"]:
-        print(f"- {item}")
+    # ==========================================
+    # DISPLAY REASONING RESULTS
+    # ==========================================
+
+    print("Results:")
+
+    if result["results"]:
+        for item in result["results"]:
+            print(f"- {item}")
+    else:
+        print("- No major warning signs detected")
 
     print("--------------------------------------")
     print()
