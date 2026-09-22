@@ -1,8 +1,7 @@
-#-----------------------
-# inferencce model
-#----------------------
+# -----------------------
+# inference model
+# -----------------------
 
-# Sensor data dictionary
 def calculate_index(
     temperature_c: float,
     humidity: float,
@@ -10,8 +9,7 @@ def calculate_index(
     pm2_5: float,
     pm10: float,
     voc_index: float,
-    nox_index: float,
-    co_ppm: float = 0.0
+    nox_index: float
 ) -> dict:
     """
     Rule-based environmental inference model.
@@ -25,75 +23,77 @@ def calculate_index(
     dust_score = 0
     urban_pollution_score = 0
     general_danger_score = 0
-    
-    # empty string for output results
+
+    # Extra category scores
+    particle_pollution_score = 0
+    coarse_particle_score = 0
+    voc_event_score = 0
+    nox_event_score = 0
+
+    # Output messages
     results = []
 
-     # -------------------------------
+    # -------------------------------
     # VOC / NOx gas evidence
     # -------------------------------
 
-    if voc_index >= 150:
+    if voc_index >= 100:
+        voc_event_score += 1
         smoke_score += 1
         urban_pollution_score += 1
         general_danger_score += 1
         results.append("VOC Index indicates an elevated VOC event")
 
-    if nox_index >= 20:
+    if nox_index >= 1:
+        nox_event_score += 1
         urban_pollution_score += 1
         general_danger_score += 1
         results.append("NOx Index indicates an elevated NOx event")
 
-    if nox_index >= 20 and pm2_5 > 35:
+    if nox_index >= 1 and pm2_5 > 35:
         urban_pollution_score += 2
         general_danger_score += 1
         results.append("NOx and PM2.5 are both elevated, suggesting combustion-related pollution")
 
-    if voc_index >= 150 and pm2_5 > 35:
+    if voc_index >= 100 and pm2_5 > 35:
         smoke_score += 2
         general_danger_score += 1
         results.append("VOC Index and PM2.5 are both elevated, suggesting smoke or indoor/outdoor pollution event")
 
+    # -------------------------------
+    # PM2.5 / smoke-like evidence
+    # -------------------------------
 
-    # -------------------------------
-    # Smoke / wildfire-like evidence
-    # -------------------------------
-    # Smoke is usually more related to fine particles: PM2.5.
     if pm2_5 > 35:
         smoke_score += 2
+        particle_pollution_score += 2
         general_danger_score += 1
         results.append("PM2.5 is elevated")
 
     if pm2_5 > 55:
         smoke_score += 2
+        particle_pollution_score += 2
         general_danger_score += 2
         results.append("PM2.5 is very high")
 
-    if voc_index > 150:
-        smoke_score += 1
-        general_danger_score += 1
-        results.append("VOC index is elevated")
-
-    if co_ppm > 1.0:
-        smoke_score += 1
-        urban_pollution_score += 1
-        results.append("CO is elevated")
-
     # -------------------------------
-    # Dust evidence
+    # PM10 / dust / coarse particle evidence
     # -------------------------------
-    # Dust is often more related to coarse particles: PM10.
+
     if pm10 > 50:
         dust_score += 2
+        coarse_particle_score += 1
+        particle_pollution_score += 2
         general_danger_score += 1
         results.append("PM10 is elevated")
 
     if pm10 > 100:
         dust_score += 2
+        coarse_particle_score += 1
+        particle_pollution_score += 2
         general_danger_score += 2
         results.append("PM10 is very high")
 
-    # PM10 much larger than PM2.5 can suggest coarse particles.
     if pm2_5 > 0:
         pm10_pm25_ratio = pm10 / pm2_5
     else:
@@ -101,43 +101,42 @@ def calculate_index(
 
     if pm10_pm25_ratio > 3:
         dust_score += 1
-        evidence.append("PM10 is much higher than PM2.5")
-
-    if wind_speed > 15:
-        dust_score += 1
-        evidence.append("Wind speed is elevated")
+        coarse_particle_score += 1
+        results.append("PM10 is much higher than PM2.5, suggesting coarse particle pollution")
 
     # -------------------------------
     # Urban / combustion pollution evidence
     # -------------------------------
+
     if nox_index > 100:
         urban_pollution_score += 2
         general_danger_score += 1
-        evidence.append("NOx index is elevated")
+        results.append("NOx index is elevated")
 
     if nox_index > 200:
         urban_pollution_score += 2
         general_danger_score += 2
-        evidence.append("NOx index is very high")
+        results.append("NOx index is very high")
 
     if pm2_5 > 35 and nox_index > 100:
         urban_pollution_score += 1
-        evidence.append("PM2.5 and NOx are both elevated")
+        results.append("PM2.5 and NOx are both elevated")
 
     if voc_index > 150 and nox_index > 100:
         urban_pollution_score += 1
-        evidence.append("VOC and NOx are both elevated")
+        results.append("VOC and NOx are both elevated")
 
     # -------------------------------
-    # Humidity correction / caution
+    # Humidity caution
     # -------------------------------
-    # High humidity can affect optical PM readings.
+
     if humidity > 85:
-        evidence.append("High humidity may affect PM sensor readings")
+        results.append("High humidity may affect PM sensor readings")
 
     # -------------------------------
     # Risk classification
     # -------------------------------
+
     if general_danger_score >= 5:
         danger_level = "dangerous"
     elif general_danger_score >= 3:
@@ -150,13 +149,14 @@ def calculate_index(
     # -------------------------------
     # Event assessment
     # -------------------------------
+
     event = "no major event detected"
 
     if smoke_score >= 4 and smoke_score >= dust_score:
         event = "possible smoke event"
 
     if dust_score >= 4 and dust_score > smoke_score:
-        event = "possible dust event"
+        event = "possible dust/coarse particle event"
 
     if urban_pollution_score >= 4:
         event = "possible urban/combustion pollution event"
@@ -166,6 +166,10 @@ def calculate_index(
         "dust_score": dust_score,
         "urban_pollution_score": urban_pollution_score,
         "general_danger_score": general_danger_score,
+        "particle_pollution_score": particle_pollution_score,
+        "coarse_particle_score": coarse_particle_score,
+        "voc_event_score": voc_event_score,
+        "nox_event_score": nox_event_score,
         "danger_level": danger_level,
         "event": event,
         "results": results,
