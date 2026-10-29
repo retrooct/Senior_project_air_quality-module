@@ -1,131 +1,177 @@
+# -----------------------
+# inference model
+# -----------------------
 
-import influxdb_client
-import os
+def calculate_index(
+    temperature_c: float,
+    humidity: float,
+    pm1_0: float,
+    pm2_5: float,
+    pm10: float,
+    voc_index: float,
+    nox_index: float
+) -> dict:
+    """
+    Rule-based environmental inference model.
 
-from influxdb_client import Point
-from influxdb_client.client.write_api import SYNCHRONOUS
+    This does not prove a wildfire, dust storm, or pollution source.
+    It estimates possible environmental conditions based on sensor patterns.
+    """
 
+    # Rule-based environmental risk scores
+    smoke_score = 0
+    dust_score = 0
+    urban_pollution_score = 0
+    general_danger_score = 0
 
-# ==========================================
-# INFLUXDB CONFIGURATION
-# ==========================================
+    # Extra category scores
+    particle_pollution_score = 0
+    coarse_particle_score = 0
+    voc_event_score = 0
+    nox_event_score = 0
 
-token = os.environ.get("INFLUXDB_TOKEN")
-org = "Senior_project"
-url = "http://10.0.0.52:8086"
-bucket = "weather_data"
+    # Output messages
+    results = []
 
+    # -------------------------------
+    # VOC / NOx gas evidence
+    # -------------------------------
 
-# ==========================================
-# SAVE SENSOR AND INFERENCE DATA
-# ==========================================
+    if voc_index >= 100:
+        voc_event_score += 1
+        smoke_score += 1
+        urban_pollution_score += 1
+        general_danger_score += 1
+        results.append("VOC Index indicates an elevated VOC event")
 
-def save_reading(sensor_data, result):
+    if nox_index >= 1:
+        nox_event_score += 1
+        urban_pollution_score += 1
+        general_danger_score += 1
+        results.append("NOx Index indicates an elevated NOx event")
 
-    if not token:
-        print("Error: INFLUXDB_TOKEN is not set")
-        return False
+    if nox_index >= 1 and pm2_5 > 35:
+        urban_pollution_score += 2
+        general_danger_score += 1
+        results.append("NOx and PM2.5 are both elevated, suggesting combustion-related pollution")
 
-    # Create an InfluxDB measurement
-    point = Point("air_quality").tag(
-        "device", "raspberry_pi"
-    )
+    if voc_index >= 100 and pm2_5 > 35:
+        smoke_score += 2
+        general_danger_score += 1
+        results.append("VOC Index and PM2.5 are both elevated, suggesting smoke or indoor/outdoor pollution event")
 
-    # --------------------------------------
-    # RAW SENSOR READINGS
-    # --------------------------------------
+    # -------------------------------
+    # PM2.5 / smoke-like evidence
+    # -------------------------------
 
-    sensor_fields = [
-        "temperature_c",
-        "humidity",
-        "pm1_0",
-        "pm2_5",
-        "pm10",
-        "voc_index",
-        "nox_index"
-    ]
+    if pm2_5 > 35:
+        smoke_score += 2
+        particle_pollution_score += 2
+        general_danger_score += 1
+        results.append("PM2.5 is elevated")
 
-    for name in sensor_fields:
-        value = sensor_data.get(name)
+    if pm2_5 > 55:
+        smoke_score += 2
+        particle_pollution_score += 2
+        general_danger_score += 2
+        results.append("PM2.5 is very high")
 
-        if value is not None:
-            point = point.field(name, float(value))
+    # -------------------------------
+    # PM10 / dust / coarse particle evidence
+    # -------------------------------
 
-    # --------------------------------------
-    # INFERENCE MODEL SCORES
-    # --------------------------------------
+    if pm10 > 50:
+        dust_score += 2
+        coarse_particle_score += 1
+        particle_pollution_score += 2
+        general_danger_score += 1
+        results.append("PM10 is elevated")
 
-    inference_fields = [
-        "smoke_score",
-        "dust_score",
-        "urban_pollution_score",
-        "general_danger_score"
-    ]
+    if pm10 > 100:
+        dust_score += 2
+        coarse_particle_score += 1
+        particle_pollution_score += 2
+        general_danger_score += 2
+        results.append("PM10 is very high")
 
-    for name in inference_fields:
-        value = result.get(name)
+    if pm2_5 > 0:
+        pm10_pm25_ratio = pm10 / pm2_5
+    else:
+        pm10_pm25_ratio = 0.0
 
-        if value is not None:
-            point = point.field(name, int(value))
+    if pm10_pm25_ratio > 3:
+        dust_score += 1
+        coarse_particle_score += 1
+        results.append("PM10 is much higher than PM2.5, suggesting coarse particle pollution")
 
-    # --------------------------------------
-    # INFERRED EVENT CLASSIFICATION
-    # --------------------------------------
+    # -------------------------------
+    # Urban / combustion pollution evidence
+    # -------------------------------
 
-    event = result.get("event")
+    if nox_index > 100:
+        urban_pollution_score += 2
+        general_danger_score += 1
+        results.append("NOx index is elevated")
 
-    if event is not None:
-        point = point.field("event", str(event))
-        
-        
+    if nox_index > 200:
+        urban_pollution_score += 2
+        general_danger_score += 2
+        results.append("NOx index is very high")
 
-    # --------------------------------------
-    # Danger level
-    # --------------------------------------
+    if pm2_5 > 35 and nox_index > 100:
+        urban_pollution_score += 1
+        results.append("PM2.5 and NOx are both elevated")
 
-    danger_level = result.get("danger_level")
+    if voc_index > 150 and nox_index > 100:
+        urban_pollution_score += 1
+        results.append("VOC and NOx are both elevated")
 
-    if danger_level is not None:
-        point = point.field("danger_level", str(danger_level))
-        
+    # -------------------------------
+    # Humidity caution
+    # -------------------------------
 
-    # --------------------------------------
-    # INFERENCE EXPLANATIONS
-    # --------------------------------------
+    if humidity > 85:
+        results.append("High humidity may affect PM sensor readings")
 
-    explanations = result.get("results")
+    # -------------------------------
+    # Risk classification
+    # -------------------------------
 
-    if explanations:
-        point = point.field(
-            "results",
-            "\n".join(map(str, explanations))
-        )
+    if general_danger_score >= 5:
+        danger_level = "dangerous"
+    elif general_danger_score >= 3:
+        danger_level = "unhealthy"
+    elif general_danger_score >= 1:
+        danger_level = "moderate concern"
+    else:
+        danger_level = "normal"
 
-    # --------------------------------------
-    # SEND DATA TO INFLUXDB
-    # --------------------------------------
+    # -------------------------------
+    # Event assessment
+    # -------------------------------
 
-    try:
-        with influxdb_client.InfluxDBClient(
-            url=url,
-            token=token,
-            org=org,
-            timeout=10000
-        ) as client:
+    event = "no major event detected"
 
-            with client.write_api(
-                write_options=SYNCHRONOUS
-            ) as write_api:
+    if smoke_score >= 4 and smoke_score >= dust_score:
+        event = "possible smoke event"
 
-                write_api.write(
-                    bucket=bucket,
-                    org=org,
-                    record=point
-                )
+    if dust_score >= 4 and dust_score > smoke_score:
+        event = "possible dust/coarse particle event"
 
-        print("InfluxDB: Sensor and inference data saved")
-        return True
+    if urban_pollution_score >= 4:
+        event = "possible urban/combustion pollution event"
 
-    except Exception as error:
-        print("InfluxDB write failed:", error)
-        return False
+    return {
+        "smoke_score": smoke_score,
+        "dust_score": dust_score,
+        "urban_pollution_score": urban_pollution_score,
+        "general_danger_score": general_danger_score,
+        "particle_pollution_score": particle_pollution_score,
+        "coarse_particle_score": coarse_particle_score,
+        "voc_event_score": voc_event_score,
+        "nox_event_score": nox_event_score,
+        "danger_level": danger_level,
+        "event": event,
+        "results": results,
+        "pm10_pm25_ratio": pm10_pm25_ratio
+    }
