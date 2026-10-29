@@ -1,28 +1,27 @@
+
 # main.py
 
 import time
-from inference import calculate_index
 
-from temp_sense import read_temperature_c
-from temp_sense import read_temperature_f
+from inference import calculate_index
+from database import save_reading
 
 
 while True:
     # ==========================================
     # SENSOR VALUES
-    # replace the values for the 
+    # For now these are placeholder test values.
     # ==========================================
 
-    temperature_c = read_temperature_c()
-    
-    humidity = 48.0
+    temperature_c = 29
+    humidity = 35
 
-    pm1_0 = 12.0
-    pm2_5 = 42.5
-    pm10 = 60.0
+    pm1_0 = 3
+    pm2_5 = 12
+    pm10 = 95
 
-    voc_index = 165.0
-    nox_index = 80.0
+    voc_index = 85
+    nox_index = 5
 
     # ==========================================
     # RUN INFERENCE MODEL
@@ -80,5 +79,32 @@ while True:
 
     print("--------------------------------------")
     print()
+
+    # ==========================================
+    # SAVE SENSOR AND INFERENCE DATA TO INFLUXDB
+    # ==========================================
+
+    sensor_data = {
+        "temperature_c": temperature_c,
+        "humidity": humidity,
+        "pm1_0": pm1_0,
+        "pm2_5": pm2_5,
+        "pm10": pm10,
+        "voc_index": voc_index,
+        "nox_index": nox_index
+    }
+
+    saved = save_reading(sensor_data, result)
+
+    if saved:
+        print("Database update successful")
+    else:
+        print("Database update failed")
+
+    print()
+
+    # ==========================================
+    # WAIT BEFORE NEXT READING
+    # ==========================================
 
     time.sleep(5)
