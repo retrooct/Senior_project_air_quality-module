@@ -1,4 +1,6 @@
 
+# database.py
+
 import os
 import influxdb_client
 
@@ -27,14 +29,13 @@ def save_reading(sensor_data, result):
         print("Error: INFLUXDB_TOKEN is not set")
         return False
 
-    # Create measurement
     point = (
         Point("air_quality")
         .tag("device", "raspberry_pi")
     )
 
     # --------------------------------------
-    # SENSOR READINGS
+    # Sensor measurements
     # --------------------------------------
 
     sensor_fields = [
@@ -50,16 +51,14 @@ def save_reading(sensor_data, result):
     ]
 
     for name in sensor_fields:
+
         value = sensor_data.get(name)
 
         if value is not None:
-            point = point.field(
-                name,
-                float(value)
-            )
+            point = point.field(name, float(value))
 
     # --------------------------------------
-    # INFERENCE SCORES
+    # Inference scores
     # --------------------------------------
 
     inference_fields = [
@@ -74,16 +73,14 @@ def save_reading(sensor_data, result):
     ]
 
     for name in inference_fields:
+
         value = result.get(name)
 
         if value is not None:
-            point = point.field(
-                name,
-                int(value)
-            )
+            point = point.field(name, int(value))
 
     # --------------------------------------
-    # PM10 / PM2.5 RATIO
+    # PM10 / PM2.5 ratio
     # --------------------------------------
 
     ratio = result.get("pm10_pm25_ratio")
@@ -95,31 +92,38 @@ def save_reading(sensor_data, result):
         )
 
     # --------------------------------------
-    # EVENT CLASSIFICATION
+    # PM2.5 AQI-like estimate
     # --------------------------------------
 
-    event = result.get("event")
+    pm25_aqi = result.get("pm25_aqi")
 
-    if event is not None:
+    if pm25_aqi is not None:
         point = point.field(
-            "event",
-            str(event)
+            "pm25_aqi",
+            int(pm25_aqi)
         )
 
     # --------------------------------------
-    # DANGER LEVEL
+    # Text classifications
     # --------------------------------------
 
-    danger_level = result.get("danger_level")
+    text_fields = [
+        "pm25_aqi_category",
+        "voc_state",
+        "nox_state",
+        "event",
+        "danger_level"
+    ]
 
-    if danger_level is not None:
-        point = point.field(
-            "danger_level",
-            str(danger_level)
-        )
+    for name in text_fields:
+
+        value = result.get(name)
+
+        if value is not None:
+            point = point.field(name, str(value))
 
     # --------------------------------------
-    # INFERENCE EXPLANATIONS
+    # Inference explanations
     # --------------------------------------
 
     explanations = result.get("results")
@@ -131,7 +135,7 @@ def save_reading(sensor_data, result):
         )
 
     # --------------------------------------
-    # WRITE TO INFLUXDB
+    # Write to InfluxDB
     # --------------------------------------
 
     try:
@@ -152,17 +156,9 @@ def save_reading(sensor_data, result):
                     record=point
                 )
 
-        print(
-            "InfluxDB: Sensor and inference data saved"
-        )
-
+        print("InfluxDB: Data saved successfully")
         return True
 
     except Exception as error:
-
-        print(
-            "InfluxDB write failed:",
-            error
-        )
-
+        print("InfluxDB write failed:", error)
         return False
