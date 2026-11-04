@@ -1,6 +1,117 @@
+import time
+import threading
+
 import glob
+import board
+from adafruit_sgp41.sgp41 import SGP41
+from sensirion_gas_index_algorithm.voc_algorithm import VocAlgorithm
+from sensirion_gas_index_algorithm.nox_algorithm import NoxAlgorithm
 
 
+class SGP41Sensor:
+
+    def __init__(self):
+        self.i2c = board.I2C()
+        self.sensor = SGP41(self.i2c)
+
+        self.voc_algorithm = VocAlgorithm()
+        self.nox_algorithm = NoxAlgorithm()
+
+        self.latest_reading = None
+        self.error = None
+
+        self.lock = threading.Lock()
+        self.stop_event = threading.Event()
+        self.thread = None
+
+    def start(self):
+        if self.thread and self.thread.is_alive():
+            return
+
+        self.stop_event.clear()
+
+        self.thread = threading.Thread(
+            target=self._sampling_loop,
+            daemon=True
+        )
+        self.thread.start()
+
+    def _sampling_loop(self):
+        try:
+            # Initial SGP41 conditioning
+            print("Conditioning SGP41...")
+
+            for count in range(10):
+                if self.stop_event.is_set():
+                    return
+
+                self.sensor.conditioning()
+                time.sleep(1)
+
+            print("SGP41 conditioning complete")
+
+            next_sample = time.monotonic()
+
+            while not self.stop_event.is_set():
+
+                # Read both raw signals together
+                raw_voc, raw_nox = self.sensor.measure_raw()
+
+                # Calculate gas indices
+                voc_index = self.voc_algorithm.process(raw_voc)
+                nox_index = self.nox_algorithm.process(raw_nox)
+
+                # Zero indicates algorithm warm-up
+                reading = {
+                    "raw_voc": raw_voc,
+                    "raw_nox": raw_nox,
+                    "voc_index": (
+                        voc_index if voc_index > 0 else None
+                    ),
+                    "nox_index": (
+                        nox_index if nox_index > 0 else None
+                    )
+                }
+
+                with self.lock:
+                    self.latest_reading = reading
+                    self.error = None
+
+                # Maintain approximately 1-second sampling
+                next_sample += 1.0
+
+                delay = max(
+                    0,
+                    next_sample - time.monotonic()
+                )
+
+                if self.stop_event.wait(delay):
+                    break
+
+        except Exception as error:
+            with self.lock:
+                self.error = str(error)
+                self.latest_reading = None
+
+            print("SGP41 sensor error:", error)
+
+    def read(self):
+        """
+        Return the most recent sensor measurement.
+        Returns None until the first reading is ready.
+        """
+
+        with self.lock:
+            if self.latest_reading is None:
+                return None
+
+            return self.latest_reading.copy()
+
+    def stop(self):
+        self.stop_event.set()
+
+        if self.thread:
+            self.thread.join(timeout=2)
 def read_temperature_c() -> float | None:
     """
     Reads the DS18B20 temperature sensor once.
@@ -50,3 +161,5 @@ def read_temperature_f() -> float | None:
 
     temp_f = temp_c * 9 / 5 + 32
     return temp_f
+
+
