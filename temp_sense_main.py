@@ -7,6 +7,8 @@ from adafruit_sgp41.sgp41 import SGP41
 from sensirion_gas_index_algorithm.voc_algorithm import VocAlgorithm
 from sensirion_gas_index_algorithm.nox_algorithm import NoxAlgorithm
 
+from pms5003 import PMS5003
+
 
 class SGP41Sensor:
 
@@ -112,6 +114,36 @@ class SGP41Sensor:
 
         if self.thread:
             self.thread.join(timeout=2)
+
+
+class PMS5003Sensor:
+
+    def __init__(self):
+        self.sensor = PMS5003(
+            device="/dev/serial0",
+            baudrate=9600
+        )
+
+    def read(self):
+        """
+        Read PM1.0, PM2.5, and PM10 concentrations.
+
+        Returns a dictionary compatible with main.py.
+        All concentrations are in µg/m³.
+        """
+
+        data = self.sensor.read()
+
+        pm1_0 = float(data.pm_ug_per_m3(1.0))
+        pm2_5 = float(data.pm_ug_per_m3(2.5))
+        pm10 = float(data.pm_ug_per_m3(10))
+
+        return {
+            "pm1_0": pm1_0,
+            "pm2_5": pm2_5,
+            "pm10": pm10
+        }
+        
 def read_temperature_c() -> float | None:
     """
     Reads the DS18B20 temperature sensor once.
