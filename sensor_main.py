@@ -1,14 +1,20 @@
+
+# sensor.py
+
 import time
 import threading
 
-import glob
 import board
+from pms5003 import PMS5003
+
 from adafruit_sgp41.sgp41 import SGP41
 from sensirion_gas_index_algorithm.voc_algorithm import VocAlgorithm
 from sensirion_gas_index_algorithm.nox_algorithm import NoxAlgorithm
 
-from pms5003 import PMS5003
 
+# ==========================================
+# SGP41 VOC / NOx SENSOR
+# ==========================================
 
 class SGP41Sensor:
 
@@ -40,7 +46,6 @@ class SGP41Sensor:
 
     def _sampling_loop(self):
         try:
-            # Initial SGP41 conditioning
             print("Conditioning SGP41...")
 
             for count in range(10):
@@ -48,7 +53,10 @@ class SGP41Sensor:
                     return
 
                 self.sensor.conditioning()
-                time.sleep(1)
+                print(f"Conditioning {count + 1}/10")
+
+                if self.stop_event.wait(1):
+                    return
 
             print("SGP41 conditioning complete")
 
@@ -56,22 +64,23 @@ class SGP41Sensor:
 
             while not self.stop_event.is_set():
 
-                # Read both raw signals together
                 raw_voc, raw_nox = self.sensor.measure_raw()
 
-                # Calculate gas indices
                 voc_index = self.voc_algorithm.process(raw_voc)
                 nox_index = self.nox_algorithm.process(raw_nox)
 
-                # Zero indicates algorithm warm-up
                 reading = {
-                    "raw_voc": raw_voc,
-                    "raw_nox": raw_nox,
+                    "raw_voc": float(raw_voc),
+                    "raw_nox": float(raw_nox),
+
                     "voc_index": (
-                        voc_index if voc_index > 0 else None
+                        float(voc_index)
+                        if voc_index > 0 else None
                     ),
+
                     "nox_index": (
-                        nox_index if nox_index > 0 else None
+                        float(nox_index)
+                        if nox_index > 0 else None
                     )
                 }
 
@@ -79,15 +88,16 @@ class SGP41Sensor:
                     self.latest_reading = reading
                     self.error = None
 
-                # Maintain approximately 1-second sampling
                 next_sample += 1.0
 
-                delay = max(
-                    0,
-                    next_sample - time.monotonic()
-                )
+                # Avoid repeated immediate samples if delayed
+                now = time.monotonic()
+                if next_sample < now:
+                    next_sample = now + 1.0
 
-                if self.stop_event.wait(delay):
+                if self.stop_event.wait(
+                    max(0, next_sample - now)
+                ):
                     break
 
         except Exception as error:
@@ -95,14 +105,9 @@ class SGP41Sensor:
                 self.error = str(error)
                 self.latest_reading = None
 
-            print("SGP41 sensor error:", error)
+            print("SGP41 error:", error)
 
     def read(self):
-        """
-        Return the most recent sensor measurement.
-        Returns None until the first reading is ready.
-        """
-
         with self.lock:
             if self.latest_reading is None:
                 return None
@@ -116,6 +121,10 @@ class SGP41Sensor:
             self.thread.join(timeout=2)
 
 
+# ==========================================
+# PMS5003 PARTICULATE SENSOR
+# ==========================================
+
 class PMS5003Sensor:
 
     def __init__(self):
@@ -125,24 +134,14 @@ class PMS5003Sensor:
         )
 
     def read(self):
-        """
-        Read PM1.0, PM2.5, and PM10 concentrations.
-
-        Returns a dictionary compatible with main.py.
-        All concentrations are in µg/m³.
-        """
-
         data = self.sensor.read()
 
-        pm1_0 = float(data.pm_ug_per_m3(1.0))
-        pm2_5 = float(data.pm_ug_per_m3(2.5))
-        pm10 = float(data.pm_ug_per_m3(10))
-
         return {
-            "pm1_0": pm1_0,
-            "pm2_5": pm2_5,
-            "pm10": pm10
+            "pm1_0": float(data.pm_ug_per_m3(1.0)),
+            "pm2_5": float(data.pm_ug_per_m3(2.5)),
+            "pm10": float(data.pm_ug_per_m3(10))
         }
+
         
 def read_temperature_c() -> float | None:
     """
